@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'dart:ui' as ui;
 
@@ -9,11 +10,17 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:valley/game/data/constants.dart';
 import 'package:valley/game/domain/providers/button_provider.dart';
+import 'package:valley/game/domain/utilities/connection_status_singleton.dart';
 import 'package:valley/game/presentation/pages/home_page.dart';
+import 'package:valley/game/presentation/pages/no_connection_page.dart';
 import 'package:valley/game/presentation/pages/start_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  ConnectionStatusSingleton connectionStatus =
+      ConnectionStatusSingleton.getInstance();
+  connectionStatus.initialize();
 
   final String afDevKey = 'W59mYRZg6zQvQi7Jth7PfF';
 
@@ -50,6 +57,15 @@ void main() async {
 
   final String appsFlyerUid = await appsflyerSdk.getAppsFlyerUID();
 
+  try {
+    final result = await InternetAddress.lookup('google.com');
+    if (result.isNotEmpty && result[0].rawAddress.isNotEmpty) {
+      print('connected');
+    }
+  } on SocketException catch (_) {
+    print('not connected');
+  }
+
   runApp(
     MultiProvider(
       providers: [
@@ -79,9 +95,29 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   StreamController<String> _controller;
+  StreamSubscription _connectionChangeStream;
+
+  bool isOffline = false;
+
+  @override
+  initState() {
+    super.initState();
+
+    ConnectionStatusSingleton connectionStatus =
+        ConnectionStatusSingleton.getInstance();
+    _connectionChangeStream =
+        connectionStatus.connectionChange.listen(connectionChanged);
+  }
+
+  void connectionChanged(dynamic hasConnection) {
+    setState(() {
+      isOffline = !hasConnection;
+    });
+  }
 
   Stream<String> initPlatformState() {
     _controller = StreamController<String>();
+
     Stream stream = _controller.stream;
     String targetUrl = '?nothing';
     String deepLink = widget.facebookDeepLink;
@@ -109,27 +145,29 @@ class _MyAppState extends State<MyApp> {
     return _sysLng == 'ru' ||
             _sysLng == 'ua' ||
             _sysLng == 'kz' ||
-            _sysLng == 'fr' ||
             _sysLng == 'az' ||
-            _sysLng == 'be' || //Belgium
-            _sysLng == 'ee' || //Estonia
-            _sysLng == 'fi' || //Finland
-            _sysLng == 'de' || //Germany
-            _sysLng == 'hu' || //Hungary
-            _sysLng == 'nl' || //Netherlands
-            _sysLng == 'pt'
-        ? StreamBuilder(
-            stream: initPlatformState(),
-            builder: (context, snapshot) {
-              if (snapshot != null && snapshot.hasData) {
-                print('TARGET URL ============> ${snapshot.data}');
-                final String targetUrl = snapshot.data;
-                return HomePage(url: targetUrl);
-              }
-              return Center(
-                child: CircularProgressIndicator(),
-              );
-            })
+            _sysLng == 'mo' || // Moldavian
+            _sysLng == 'de'
+        ? buildStreamBuilder()
         : StartPage();
+  }
+
+  StreamBuilder<String> buildStreamBuilder() {
+    return StreamBuilder(
+        stream: initPlatformState(),
+        builder: (context, snapshot) {
+          if (snapshot != null && snapshot.hasData) {
+            if (!isOffline) {
+              print('TARGET URL ============> ${snapshot.data}');
+              final String targetUrl = snapshot.data;
+              return HomePage(url: targetUrl);
+            } else {
+              return NoConnectionPage();
+            }
+          }
+          return Center(
+            child: CircularProgressIndicator(),
+          );
+        });
   }
 }
