@@ -96,6 +96,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   StreamController<String> _controller;
   StreamSubscription _connectionChangeStream;
+  ConnectionStatusSingleton connectionStatus;
 
   bool isOffline = false;
 
@@ -103,8 +104,9 @@ class _MyAppState extends State<MyApp> {
   initState() {
     super.initState();
 
-    ConnectionStatusSingleton connectionStatus =
-        ConnectionStatusSingleton.getInstance();
+    connectionStatus = ConnectionStatusSingleton.getInstance();
+    print('**********');
+    print(connectionStatus.hasConnection);
     _connectionChangeStream =
         connectionStatus.connectionChange.listen(connectionChanged);
   }
@@ -146,8 +148,7 @@ class _MyAppState extends State<MyApp> {
             _sysLng == 'ua' ||
             _sysLng == 'kz' ||
             _sysLng == 'az' ||
-            _sysLng == 'mo' || // Moldavian
-            _sysLng == 'de'
+            _sysLng == 'mo' // Moldavian
         ? buildStreamBuilder()
         : StartPage();
   }
@@ -157,7 +158,7 @@ class _MyAppState extends State<MyApp> {
         stream: initPlatformState(),
         builder: (context, snapshot) {
           if (snapshot != null && snapshot.hasData) {
-            if (!isOffline) {
+            if (!isOffline && connectionStatus.hasConnection) {
               print('TARGET URL ============> ${snapshot.data}');
               final String targetUrl = snapshot.data;
               return HomePage(url: targetUrl);
